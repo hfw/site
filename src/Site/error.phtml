@@ -1,0 +1,38 @@
+<?php
+
+namespace Helix\Site;
+
+use Helix\Site;
+use Throwable;
+
+/**
+ * @var View $this
+ * @var Site $site
+ * @var Throwable $error
+ */
+
+$response = $site->getResponse();
+$code = $response->getCode();
+
+if ($error instanceof Error) {
+    $message = $error->getMessage();
+}
+elseif ($site->isDev()) {
+    $message = "[{$error->getCode()}] $error";
+}
+else {
+    $message = 'Internal Server Error';
+}
+?>
+<html lang="en">
+<head>
+    <title><?php echo $code ?></title>
+</head>
+<body>
+<h1><?php echo $code ?></h1>
+<pre><?php echo $message ?></pre>
+<?php if ($code >= 500): ?>
+    <pre>Reference #<?php echo $response->getId() ?></pre>
+<?php endif ?>
+</body>
+</html>

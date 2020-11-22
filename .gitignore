@@ -1,0 +1,4 @@
+*.swp
+.idea/
+test/error.log
+vendor/
