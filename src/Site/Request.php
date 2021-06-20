@@ -7,7 +7,8 @@ use ArrayAccess;
 /**
  * The request.
  */
-class Request implements ArrayAccess {
+class Request implements ArrayAccess
+{
 
     /**
      * Grouped file uploads (multiple).
@@ -48,7 +49,8 @@ class Request implements ArrayAccess {
      */
     protected $proxies = [];
 
-    public function __construct () {
+    public function __construct()
+    {
         $this->path = Util::path(urldecode(strtok($_SERVER['REQUEST_URI'], '?')));
         $this->headers = array_change_key_case(getallheaders()); // phpstorm bug submitted, ext-apache isn't needed.
         foreach ($_FILES as $name => $info) {
@@ -61,8 +63,7 @@ class Request implements ArrayAccess {
                         $info['tmp_name'][$i]
                     );
                 }
-            }
-            else {
+            } else {
                 $this->files[$name] = new Upload(
                     $info['error_code'],
                     $info['name'],
@@ -75,7 +76,8 @@ class Request implements ArrayAccess {
     /**
      * @return string
      */
-    final public function __toString () {
+    final public function __toString()
+    {
         return $this->path;
     }
 
@@ -84,7 +86,8 @@ class Request implements ArrayAccess {
      *
      * @return array
      */
-    public function getArgs (): array {
+    public function getArgs(): array
+    {
         return array_merge($_GET, $_POST);
     }
 
@@ -93,7 +96,8 @@ class Request implements ArrayAccess {
      *
      * @return string
      */
-    public function getClient () {
+    public function getClient()
+    {
         if (in_array($_SERVER['REMOTE_ADDR'], $this->proxies)) {
             return $this['X-Forwarded-For'] ?? $_SERVER['REMOTE_ADDR'];
         }
@@ -104,7 +108,8 @@ class Request implements ArrayAccess {
      * @param string $name
      * @return null|Upload
      */
-    final public function getFile (string $name) {
+    final public function getFile(string $name)
+    {
         return $this->files[$name] ?? null;
     }
 
@@ -112,70 +117,80 @@ class Request implements ArrayAccess {
      * @param string $name
      * @return Upload[]
      */
-    final public function getFileGroup (string $name) {
+    final public function getFileGroup(string $name)
+    {
         return $this->fileGroups[$name] ?? [];
     }
 
     /**
      * @return Upload[][]
      */
-    final public function getFileGroups () {
+    final public function getFileGroups()
+    {
         return $this->fileGroups;
     }
 
     /**
      * @return Upload[]
      */
-    final public function getFiles () {
+    final public function getFiles()
+    {
         return $this->files;
     }
 
     /**
      * @return string[]
      */
-    public function getHeaders (): array {
+    public function getHeaders(): array
+    {
         return $this->headers;
     }
 
     /**
      * @return string
      */
-    final public function getMethod (): string {
+    final public function getMethod(): string
+    {
         return $_SERVER['REQUEST_METHOD'];
     }
 
     /**
      * @return string
      */
-    final public function getPath (): string {
+    final public function getPath(): string
+    {
         return $this->path;
     }
 
     /**
      * @return string[]
      */
-    public function getProxies (): array {
+    public function getProxies(): array
+    {
         return $this->proxies;
     }
 
     /**
      * @return bool
      */
-    final public function isDelete (): bool {
+    final public function isDelete(): bool
+    {
         return $_SERVER['REQUEST_METHOD'] === 'DELETE';
     }
 
     /**
      * @return bool
      */
-    final public function isGet (): bool {
+    final public function isGet(): bool
+    {
         return $_SERVER['REQUEST_METHOD'] === 'GET';
     }
 
     /**
      * @return bool
      */
-    final public function isHead (): bool {
+    final public function isHead(): bool
+    {
         return $_SERVER['REQUEST_METHOD'] === 'HEAD';
     }
 
@@ -184,14 +199,16 @@ class Request implements ArrayAccess {
      *
      * @return bool
      */
-    final public function isMuting (): bool {
+    final public function isMuting(): bool
+    {
         return !$this->isGet() and !$this->isHead();
     }
 
     /**
      * @return bool
      */
-    final public function isPost (): bool {
+    final public function isPost(): bool
+    {
         return $_SERVER['REQUEST_METHOD'] === 'POST';
     }
 
@@ -201,7 +218,8 @@ class Request implements ArrayAccess {
      * @param string $key
      * @return bool
      */
-    public function offsetExists ($key) {
+    public function offsetExists($key)
+    {
         return isset($this->headers[strtolower($key)]);
     }
 
@@ -211,7 +229,8 @@ class Request implements ArrayAccess {
      * @param string $key
      * @return null|string
      */
-    public function offsetGet ($key) {
+    public function offsetGet($key)
+    {
         return $this->headers[strtolower($key)] ?? null;
     }
 
@@ -221,7 +240,8 @@ class Request implements ArrayAccess {
      * @param mixed $key
      * @param mixed $value
      */
-    public function offsetSet ($key, $value) {
+    public function offsetSet($key, $value)
+    {
         return;
     }
 
@@ -230,7 +250,8 @@ class Request implements ArrayAccess {
      *
      * @param mixed $key
      */
-    public function offsetUnset ($key) {
+    public function offsetUnset($key)
+    {
         return;
     }
 
@@ -238,7 +259,8 @@ class Request implements ArrayAccess {
      * @param string[] $proxies
      * @return $this
      */
-    public function setProxies (array $proxies) {
+    public function setProxies(array $proxies)
+    {
         $this->proxies = $proxies;
         return $this;
     }

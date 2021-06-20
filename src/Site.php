@@ -12,7 +12,8 @@ use Throwable;
 /**
  * Routing and error handling.
  */
-class Site {
+class Site
+{
 
     /**
      * @var Auth
@@ -37,7 +38,8 @@ class Site {
     /**
      * Initializes the system for routing, error handling, and output.
      */
-    public function __construct () {
+    public function __construct()
+    {
         error_reporting(E_ALL);
         set_error_handler([$this, '_onRaise']);
         $this->request = new Request();
@@ -53,11 +55,11 @@ class Site {
      * @param Throwable $error
      * @return void
      */
-    public function _onException (Throwable $error): void {
+    public function _onException(Throwable $error): void
+    {
         if (!$error instanceof Error) {
             $this->log(500, "[{$error->getCode()}] {$error}");
-        }
-        elseif ($error->getCode() >= 500) {
+        } elseif ($error->getCode() >= 500) {
             $this->log($error->getCode(), $error);
         }
         $this->response->error($error) and exit;
@@ -73,7 +75,8 @@ class Site {
      * @param int $line
      * @throws ErrorException
      */
-    public function _onRaise (int $code, string $message, string $file, int $line) {
+    public function _onRaise(int $code, string $message, string $file, int $line)
+    {
         $type = [
             E_DEPRECATED => 'E_DEPRECATED',
             E_NOTICE => 'E_NOTICE',
@@ -97,7 +100,8 @@ class Site {
      * @param callable $controller
      * @return void
      */
-    public function delete (string $path, callable $controller): void {
+    public function delete(string $path, callable $controller): void
+    {
         $this->route(['DELETE'], $path, $controller);
     }
 
@@ -108,35 +112,40 @@ class Site {
      * @param callable $controller
      * @return void
      */
-    public function get (string $path, callable $controller): void {
+    public function get(string $path, callable $controller): void
+    {
         $this->route(['GET', 'HEAD'], $path, $controller);
     }
 
     /**
      * @return Auth
      */
-    final public function getAuth () {
+    final public function getAuth()
+    {
         return $this->auth ?? $this->auth = new Auth($this);
     }
 
     /**
      * @return Request
      */
-    final public function getRequest () {
+    final public function getRequest()
+    {
         return $this->request;
     }
 
     /**
      * @return Response
      */
-    final public function getResponse () {
+    final public function getResponse()
+    {
         return $this->response;
     }
 
     /**
      * @return bool
      */
-    final public function isDev (): bool {
+    final public function isDev(): bool
+    {
         return $this->dev;
     }
 
@@ -145,7 +154,8 @@ class Site {
      * @param string $message
      * @return $this
      */
-    public function log ($code, string $message) {
+    public function log($code, string $message)
+    {
         $now = date('Y-m-d H:i:s');
         $id = $this->response->getId();
         $ip = $this->request->getClient();
@@ -162,7 +172,8 @@ class Site {
      * @param string $path
      * @param callable $controller
      */
-    public function post (string $path, callable $controller): void {
+    public function post(string $path, callable $controller): void
+    {
         $this->route(['POST'], $path, $controller);
     }
 
@@ -173,7 +184,8 @@ class Site {
      * @param callable $controller
      * @return void
      */
-    public function put (string $path, callable $controller): void {
+    public function put(string $path, callable $controller): void
+    {
         $this->route(['PUT'], $path, $controller);
     }
 
@@ -186,12 +198,12 @@ class Site {
      * @param callable $controller `(string[] $match, Site $site):mixed`
      * @return void
      */
-    protected function route (array $methods, string $path, callable $controller): void {
+    protected function route(array $methods, string $path, callable $controller): void
+    {
         $match = [];
         if ($path[0] !== '/') {
             preg_match($path, $this->request->getPath(), $match);
-        }
-        elseif ($path === $this->request->getPath()) {
+        } elseif ($path === $this->request->getPath()) {
             $match = [$path];
         }
         if ($match) {
@@ -208,7 +220,8 @@ class Site {
      * @param bool $dev
      * @return $this
      */
-    public function setDev (bool $dev) {
+    public function setDev(bool $dev)
+    {
         $this->dev = $dev;
         return $this;
     }

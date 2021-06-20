@@ -5,7 +5,8 @@ namespace Helix\Site;
 /**
  * A file upload.
  */
-class Upload {
+class Upload
+{
 
     /**
      * The temporary path.
@@ -33,7 +34,8 @@ class Upload {
      * @param string $remoteName
      * @param string $path
      */
-    public function __construct (int $status, string $remoteName, string $path) {
+    public function __construct(int $status, string $remoteName, string $path)
+    {
         $this->status = $status;
         $this->remoteName = $remoteName;
         $this->path = $path;
@@ -44,7 +46,8 @@ class Upload {
      *
      * @return null|Error
      */
-    public function getError () {
+    public function getError()
+    {
         switch ($this->status) {
             case UPLOAD_ERR_INI_SIZE:
             case UPLOAD_ERR_FORM_SIZE:
@@ -67,35 +70,40 @@ class Upload {
     /**
      * @return string
      */
-    final public function getPath (): string {
+    final public function getPath(): string
+    {
         return $this->path;
     }
 
     /**
      * @return string
      */
-    final public function getRemoteName (): string {
+    final public function getRemoteName(): string
+    {
         return $this->remoteName;
     }
 
     /**
      * @return int
      */
-    final public function getSize (): int {
+    final public function getSize(): int
+    {
         return filesize($this->path);
     }
 
     /**
      * @return int
      */
-    final public function getStatus (): int {
+    final public function getStatus(): int
+    {
         return $this->status;
     }
 
     /**
      * @return string
      */
-    final public function getType (): string {
+    final public function getType(): string
+    {
         return mime_content_type($this->path);
     }
 
@@ -103,7 +111,8 @@ class Upload {
      * @param string $path
      * @return $this
      */
-    public function move (string $path) {
+    public function move(string $path)
+    {
         move_uploaded_file($this->path, $path);
         return $this;
     }

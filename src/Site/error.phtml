@@ -16,23 +16,23 @@ $code = $response->getCode();
 
 if ($error instanceof Error) {
     $message = $error->getMessage();
-}
-elseif ($site->isDev()) {
+} elseif ($site->isDev()) {
     $message = "[{$error->getCode()}] $error";
-}
-else {
+} else {
     $message = 'Internal Server Error';
 }
 ?>
 <html lang="en">
 <head>
-    <title><?php echo $code ?></title>
+    <title><?= $code ?></title>
 </head>
 <body>
-<h1><?php echo $code ?></h1>
-<pre><?php echo $message ?></pre>
-<?php if ($code >= 500): ?>
-    <pre>Reference #<?php echo $response->getId() ?></pre>
-<?php endif ?>
+<h1><?= $code ?></h1>
+<pre><?= $message ?></pre>
+<?php
+if ($code >= 500): ?>
+    <pre>Reference #<?= $response->getId() ?></pre>
+<?php
+endif ?>
 </body>
 </html>

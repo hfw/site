@@ -3,7 +3,7 @@ Helix::Site
 
 Route requests without overhead and respond as you like.
 
-[![](https://img.shields.io/badge/PHP-~7.3-666999)](https://www.php.net)
+[![](https://img.shields.io/badge/PHP->=7.4-666999)](https://www.php.net)
 [![](https://img.shields.io/badge/packagist-a50)](https://packagist.org/packages/hfw/site)
 [![](https://img.shields.io/badge/license-MIT-black)](LICENSE.txt)
 [![](https://scrutinizer-ci.com/g/hfw/site/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/hfw/site)

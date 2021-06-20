@@ -9,7 +9,8 @@ use Throwable;
 /**
  * The response.
  */
-class Response implements ArrayAccess {
+class Response implements ArrayAccess
+{
 
     /**
      * @var int
@@ -53,7 +54,8 @@ class Response implements ArrayAccess {
     /**
      * @param Site $site
      */
-    public function __construct (Site $site) {
+    public function __construct(Site $site)
+    {
         $this->site = $site;
         $this->request = $site->getRequest();
         $this->id = uniqid();
@@ -71,7 +73,8 @@ class Response implements ArrayAccess {
      *
      * @return void
      */
-    public function _onRender (): void {
+    public function _onRender(): void
+    {
         header_remove('X-Powered-By');
         $this['X-Response-Id'] = $this->id;
         ksort($this->headers);
@@ -96,7 +99,8 @@ class Response implements ArrayAccess {
      *
      * @return void
      */
-    public function _onShutdown (): void {
+    public function _onShutdown(): void
+    {
         if ($this->site->isDev()) {
             $ip = $this->request->getClient();
             $method = $this->request->getMethod();
@@ -114,7 +118,8 @@ class Response implements ArrayAccess {
      *
      * @param Throwable $error Defaults to an `Error` with the current response code.
      */
-    public function error (Throwable $error = null): void {
+    public function error(Throwable $error = null): void
+    {
         $error = $error ?? new Error($this->code);
         $code = 500;
         if ($error instanceof Error) {
@@ -124,8 +129,7 @@ class Response implements ArrayAccess {
         $template = __DIR__ . '/error.phtml';
         if (file_exists("view/{$code}.phtml")) {
             $template = "view/{$code}.phtml";
-        }
-        elseif (file_exists('view/error.phtml')) {
+        } elseif (file_exists('view/error.phtml')) {
             $template = 'view/error.phtml';
         }
         $this->view(new View($template, [
@@ -141,7 +145,8 @@ class Response implements ArrayAccess {
      * @param string $path
      * @param bool $download
      */
-    public function file (string $path, bool $download = false): void {
+    public function file(string $path, bool $download = false): void
+    {
         clearstatcache(true, $path);
         if (!file_exists($path)) {
             $this->setCode(404)->error() and exit;
@@ -196,21 +201,24 @@ class Response implements ArrayAccess {
     /**
      * @return int
      */
-    final public function getCode (): int {
+    final public function getCode(): int
+    {
         return $this->code;
     }
 
     /**
      * @return string
      */
-    final public function getId (): string {
+    final public function getId(): string
+    {
         return $this->id;
     }
 
     /**
      * @return int
      */
-    public function getTimestamp (): int {
+    public function getTimestamp(): int
+    {
         return $this->timestamp;
     }
 
@@ -219,7 +227,8 @@ class Response implements ArrayAccess {
      *
      * @return bool
      */
-    public function isEmpty (): bool {
+    public function isEmpty(): bool
+    {
         return $this->request->isHead() or in_array($this->code, [204, 205, 304]);
     }
 
@@ -228,7 +237,8 @@ class Response implements ArrayAccess {
      *
      * @return bool
      */
-    public function isModified (): bool {
+    public function isModified(): bool
+    {
         // Explicit 304 takes precedence over all.
         if ($this->code === 304) {
             return false;
@@ -248,7 +258,8 @@ class Response implements ArrayAccess {
      *
      * @param mixed $content
      */
-    public function mixed ($content): void {
+    public function mixed($content): void
+    {
         if ($content instanceof ViewableInterface) {
             $this->view($content) and exit;
         }
@@ -264,7 +275,8 @@ class Response implements ArrayAccess {
      * @param mixed $key
      * @return bool
      */
-    public function offsetExists ($key) {
+    public function offsetExists($key)
+    {
         return isset($this->headers[$key]);
     }
 
@@ -272,7 +284,8 @@ class Response implements ArrayAccess {
      * @param mixed $key
      * @return null|string
      */
-    public function offsetGet ($key) {
+    public function offsetGet($key)
+    {
         return $this->headers[$key] ?? null;
     }
 
@@ -280,14 +293,16 @@ class Response implements ArrayAccess {
      * @param mixed $key
      * @param string $value
      */
-    public function offsetSet ($key, $value) {
+    public function offsetSet($key, $value)
+    {
         $this->headers[$key] = $value;
     }
 
     /**
      * @param mixed $key
      */
-    public function offsetUnset ($key) {
+    public function offsetUnset($key)
+    {
         unset($this->headers[$key]);
     }
 
@@ -297,7 +312,8 @@ class Response implements ArrayAccess {
      * @param string $location
      * @param int $code
      */
-    public function redirect (string $location, $code = 302) {
+    public function redirect(string $location, $code = 302)
+    {
         $this->setCode($code);
         $this['Location'] = $location;
         flush();
@@ -308,7 +324,8 @@ class Response implements ArrayAccess {
      * @param int $code
      * @return $this
      */
-    public function setCode (int $code) {
+    public function setCode(int $code)
+    {
         $this->code = $code;
         return $this;
     }
@@ -319,11 +336,11 @@ class Response implements ArrayAccess {
      * @param int $timestamp
      * @return $this
      */
-    public function setTimestamp (int $timestamp) {
+    public function setTimestamp(int $timestamp)
+    {
         if ($timestamp) {
             $this['Last-Modified'] = gmdate('D, d M Y H:i:s T', $timestamp);
-        }
-        else {
+        } else {
             unset($this['Last-Modified']);
         }
         $this->timestamp = $timestamp;
@@ -336,7 +353,8 @@ class Response implements ArrayAccess {
      * @param int $timestamp
      * @return $this
      */
-    public function touch (int $timestamp) {
+    public function touch(int $timestamp)
+    {
         if ($timestamp > $this->timestamp) {
             $this->setTimestamp($timestamp);
         }
@@ -348,7 +366,8 @@ class Response implements ArrayAccess {
      *
      * @param ViewableInterface $view
      */
-    public function view (ViewableInterface $view): void {
+    public function view(ViewableInterface $view): void
+    {
         $view->render();
         flush();
         exit;

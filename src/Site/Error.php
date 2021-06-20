@@ -8,7 +8,8 @@ use Throwable;
 /**
  * An HTTP error with a user friendly message.
  */
-class Error extends Exception {
+class Error extends Exception
+{
 
     const MESSAGES = [
         400 => 'Bad Request',
@@ -53,7 +54,8 @@ class Error extends Exception {
      * @param string $message Defaults to the standard description.
      * @param Throwable|null $previous
      */
-    public function __construct (int $code, string $message = null, Throwable $previous = null) {
+    public function __construct(int $code, string $message = null, Throwable $previous = null)
+    {
         $message = $message ?? self::MESSAGES[$code] ?? '';
         parent::__construct($message, $code, $previous);
     }

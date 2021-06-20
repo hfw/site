@@ -1,0 +1,1 @@
+this is a hidden file, but it's accessible because it's in the static directory.
