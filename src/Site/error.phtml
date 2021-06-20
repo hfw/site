@@ -14,7 +14,7 @@ use Throwable;
 $response = $site->getResponse();
 $code = $response->getCode();
 
-if ($error instanceof Error) {
+if ($error instanceof HttpError) {
     $message = $error->getMessage();
 } elseif ($site->isDev()) {
     $message = "[{$error->getCode()}] $error";

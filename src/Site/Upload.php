@@ -42,26 +42,26 @@ class Upload
     }
 
     /**
-     * Generates and returns an `Error` if the status indicates one took place.
+     * Generates and returns an {@link HttpError} if the status indicates one took place.
      *
-     * @return null|Error
+     * @return null|HttpError
      */
     public function getError()
     {
         switch ($this->status) {
             case UPLOAD_ERR_INI_SIZE:
             case UPLOAD_ERR_FORM_SIZE:
-                return new Error(413, 'The file is too large.');
+                return new HttpError(413, 'The file is too large.');
             case UPLOAD_ERR_PARTIAL:
-                return new Error(400, 'The file was only partially uploaded.');
+                return new HttpError(400, 'The file was only partially uploaded.');
             case UPLOAD_ERR_NO_FILE:
-                return new Error(400, 'No file was sent.');
+                return new HttpError(400, 'No file was sent.');
             case UPLOAD_ERR_NO_TMP_DIR:
-                return new Error(507, 'Nowhere to store the file.');
+                return new HttpError(507, 'Nowhere to store the file.');
             case UPLOAD_ERR_CANT_WRITE:
-                return new Error(507, 'Unable to write the file to storage.');
+                return new HttpError(507, 'Unable to write the file to storage.');
             case UPLOAD_ERR_EXTENSION:
-                return new Error(500, 'The file was rejected by the server.');
+                return new HttpError(500, 'The file was rejected by the server.');
             default:
                 return null;
         }

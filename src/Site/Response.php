@@ -3,6 +3,7 @@
 namespace Helix\Site;
 
 use ArrayAccess;
+use DateTimeInterface;
 use Helix\Site;
 use Throwable;
 
@@ -24,7 +25,7 @@ class Response implements ArrayAccess
      */
     protected $headers = [
         'Accept-Ranges' => 'none',
-        'Cache-Control' => 'no-cache'
+        'Cache-Control' => 'no-store'
     ];
 
     /**
@@ -64,16 +65,16 @@ class Response implements ArrayAccess
         }
         ob_end_clean();
         ob_implicit_flush(); // flush() non-empty output.
-        header_register_callback([$this, '_onRender']);
-        register_shutdown_function([$this, '_onShutdown']);
+        header_register_callback(fn() => $this->_onRender());
+        register_shutdown_function(fn() => $this->_onShutdown());
     }
 
     /**
      * Injects headers before content is put in PHP's SAPI write buffer.
      *
-     * @return void
+     * @internal
      */
-    public function _onRender(): void
+    protected function _onRender(): void
     {
         header_remove('X-Powered-By');
         $this['X-Response-Id'] = $this->id;
@@ -97,9 +98,9 @@ class Response implements ArrayAccess
      * Renders an error if nothing was written to the SAPI yet.
      * Logs the response to the SAPI handler if the site is in dev mode.
      *
-     * @return void
+     * @internal
      */
-    public function _onShutdown(): void
+    protected function _onShutdown(): void
     {
         if ($this->site->isDev()) {
             $ip = $this->request->getClient();
@@ -109,22 +110,19 @@ class Response implements ArrayAccess
             error_log($line, 4);
         }
         if (!headers_sent()) {
-            $this->error() and exit;
+            $this->error_exit();
         }
     }
 
     /**
      * Renders an error and exits.
      *
-     * @param Throwable $error Defaults to an `Error` with the current response code.
+     * @param null|Throwable $error Defaults to an {@link HttpError} with the current response code.
      */
-    public function error(Throwable $error = null): void
+    public function error_exit(Throwable $error = null): void
     {
-        $error = $error ?? new Error($this->code);
-        $code = 500;
-        if ($error instanceof Error) {
-            $code = $error->getCode();
-        }
+        $error = $error ?? new HttpError($this->code);
+        $code = $error instanceof HttpError ? $error->getCode() : 500;
         $this->setCode($code);
         $template = __DIR__ . '/error.phtml';
         if (file_exists("view/{$code}.phtml")) {
@@ -132,7 +130,7 @@ class Response implements ArrayAccess
         } elseif (file_exists('view/error.phtml')) {
             $template = 'view/error.phtml';
         }
-        $this->view(new View($template, [
+        $this->view_exit(new View($template, [
             'site' => $this->site,
             'error' => $error
         ]));
@@ -145,20 +143,20 @@ class Response implements ArrayAccess
      * @param string $path
      * @param bool $download
      */
-    public function file(string $path, bool $download = false): void
+    public function file_exit(string $path, bool $download = false): void
     {
         clearstatcache(true, $path);
         if (!file_exists($path)) {
-            $this->setCode(404)->error() and exit;
+            $this->setCode(404)->error_exit();
         }
         if (!is_file($path) or !is_readable($path)) {
-            $this->setCode(403)->error() and exit;
+            $this->setCode(403)->error_exit();
         }
         $fh = fopen($path, 'rb');
         flock($fh, LOCK_SH);
         $size = filesize($path);
         $this->setTimestamp(filemtime($path));
-        $this['ETag'] = $eTag = filemtime($path);
+        $this['ETag'] = $eTag = (string)filemtime($path);
         $this['Accept-Ranges'] = 'bytes';
         if ($download) {
             $this['Content-Disposition'] = sprintf('attachment; filename="%s"', basename($path));
@@ -173,29 +171,30 @@ class Response implements ArrayAccess
             flush();
             exit;
         }
-        if (preg_match('/^bytes=(\d+)?-(\d+)?$/', $range, $range, PREG_UNMATCHED_AS_NULL)) {
+        if (preg_match('/^bytes=(?<start>\d+)?-(?<stop>\d+)?$/', $range, $bytes, PREG_UNMATCHED_AS_NULL)) {
+            // maximum byte offset = file length - 1
             $max = $size - 1;
-            $start = $range[1] ?? (isset($range[2]) ? $size - $range[2] : 0);
-            $stop = isset($range[1]) ? $range[2] ?? $max : $max;
-            if (0 <= $start and $start <= $stop and $stop <= $max) {
-                $this->setCode(206);
-                $this['Content-Length'] = $length = $stop - $start + 1;
+            // explicit start byte, or convert a negative offset. "-0" is illegal.
+            $start = $bytes['start'] ?? (isset($bytes['stop']) ? $size - $bytes['stop'] : 0);
+            // explicit stop byte, or maximum due to negative offset
+            $stop = isset($bytes['start']) ? $bytes['stop'] ?? $max : $max;
+            if (0 <= $start and $start <= $stop and $stop <= $max) { // the range is valid
+                $this->setCode(206); // partial content
+                $length = ($stop - $start) + 1;
+                $this['Content-Length'] = $length;
                 $this['Content-Range'] = "bytes {$start}-{$stop}/{$size}";
                 fseek($fh, $start);
                 if ($stop === $max) {
                     fpassthru($fh);
-                    flush();
-                    exit;
-                }
-                while (!feof($fh)) {
-                    echo fread($fh, 8192);
+                } else {
+                    echo fread($fh, $length);
                 }
                 flush();
                 exit;
             }
         }
         $this['Content-Range'] = "bytes */{$size}";
-        $this->setCode(416)->error() and exit;
+        $this->setCode(416)->error_exit();
     }
 
     /**
@@ -258,17 +257,17 @@ class Response implements ArrayAccess
      *
      * @param mixed $content
      */
-    public function mixed($content): void
+    public function mixed_exit($content): void
     {
-        if ($content instanceof ViewableInterface) {
-            $this->view($content) and exit;
+        if ($content instanceof View) {
+            $this->view_exit($content);
+        } elseif ($content instanceof Throwable) {
+            $this->error_exit($content);
+        } else {
+            echo $content;
+            flush();
+            exit;
         }
-        if ($content instanceof Throwable) {
-            $this->error($content) and exit;
-        }
-        echo $content;
-        flush();
-        exit;
     }
 
     /**
@@ -312,12 +311,27 @@ class Response implements ArrayAccess
      * @param string $location
      * @param int $code
      */
-    public function redirect(string $location, $code = 302)
+    public function redirect_exit(string $location, int $code = 302): void
     {
         $this->setCode($code);
         $this['Location'] = $location;
         flush();
         exit;
+    }
+
+    /**
+     * Specifies how long the response can be cached by the client.
+     *
+     * @param int|DateTimeInterface $ttl Zero or negative time means "don't cache"
+     * @return $this
+     */
+    public function setCacheTtl($ttl)
+    {
+        if ($ttl instanceof DateTimeInterface) {
+            $ttl = $ttl->getTimestamp() - time();
+        }
+        $this['Cache-Control'] = $ttl > 0 ? "must-revalidate, max-age={$ttl}" : 'no-store';
+        return $this;
     }
 
     /**
@@ -364,11 +378,16 @@ class Response implements ArrayAccess
     /**
      * Renders a view and exits.
      *
-     * @param ViewableInterface $view
+     * If the request is `HEAD` this skips rendering content and only outputs headers.
+     *
+     * @param View $view
      */
-    public function view(ViewableInterface $view): void
+    public function view_exit(View $view): void
     {
-        $view->render();
+        $this->setCacheTtl($view->getCacheTtl());
+        if (!$this->request->isHead()) {
+            $view->render();
+        }
         flush();
         exit;
     }

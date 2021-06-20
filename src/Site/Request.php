@@ -3,6 +3,7 @@
 namespace Helix\Site;
 
 use ArrayAccess;
+use LogicException;
 
 /**
  * The request.
@@ -49,25 +50,28 @@ class Request implements ArrayAccess
      */
     protected $proxies = [];
 
+    /**
+     * Constructs using CGI data.
+     */
     public function __construct()
     {
         $this->path = Util::path(urldecode(strtok($_SERVER['REQUEST_URI'], '?')));
-        $this->headers = array_change_key_case(getallheaders()); // phpstorm bug submitted, ext-apache isn't needed.
-        foreach ($_FILES as $name => $info) {
-            if (is_array($info['name'])) {
-                // php makes file group $info tabular.
-                for ($i = 0; $i < count($info['name']); $i++) {
+        $this->headers = array_change_key_case(getallheaders());
+        foreach ($_FILES as $name => $file) {
+            if (is_array($file['name'])) {
+                // php makes file groups an inside-out table. unwrap it.
+                for ($i = 0; $i < count($file['name']); $i++) {
                     $this->fileGroups[$name][$i] = new Upload(
-                        $info['error_code'][$i],
-                        $info['name'][$i],
-                        $info['tmp_name'][$i]
+                        $file['error_code'][$i],
+                        $file['name'][$i],
+                        $file['tmp_name'][$i]
                     );
                 }
             } else {
                 $this->files[$name] = new Upload(
-                    $info['error_code'],
-                    $info['name'],
-                    $info['tmp_name']
+                    $file['error_code'],
+                    $file['name'],
+                    $file['tmp_name']
                 );
             }
         }
@@ -218,7 +222,7 @@ class Request implements ArrayAccess
      * @param string $key
      * @return bool
      */
-    public function offsetExists($key)
+    public function offsetExists($key): bool
     {
         return isset($this->headers[strtolower($key)]);
     }
@@ -229,30 +233,32 @@ class Request implements ArrayAccess
      * @param string $key
      * @return null|string
      */
-    public function offsetGet($key)
+    public function offsetGet($key): ?string
     {
         return $this->headers[strtolower($key)] ?? null;
     }
 
     /**
-     * Does nothing.
+     * Throws.
      *
      * @param mixed $key
      * @param mixed $value
+     * @throws LogicException
      */
-    public function offsetSet($key, $value)
+    final public function offsetSet($key, $value): void
     {
-        return;
+        throw new LogicException('Request headers are immutable.');
     }
 
     /**
-     * Does nothing.
+     * Throws.
      *
      * @param mixed $key
+     * @throws LogicException
      */
-    public function offsetUnset($key)
+    final public function offsetUnset($key): void
     {
-        return;
+        throw new LogicException('Request headers are immutable.');
     }
 
     /**

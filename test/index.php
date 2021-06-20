@@ -5,10 +5,12 @@ if (preg_match('#^/static/?#', $_SERVER['REQUEST_URI'])) {
     return false;
 }
 
-require_once '../vendor/autoload.php';
+include_once '../vendor/autoload.php';
 
 use Helix\Site;
-use Helix\Site\Error;
+use Helix\Site\HttpError;
+use Helix\Site\Test\AccountController;
+use Helix\Site\Test\LoginController;
 use Helix\Site\View;
 
 $site = new Site;
@@ -32,49 +34,24 @@ $site->get('/headers', function () use ($site) {
 
 // 200, 206, 404, 416
 $site->get('#^/file/(?<name>[^./].*)$#', function (array $path, Site $site) {
-    $site->getResponse()->file("static/{$path['name']}");
+    $site->getResponse()->setCacheTtl(10)->file_exit("static/{$path['name']}");
 });
 
 // 302
-$site->get('/redirect', function () use ($site) {
-    $site->getResponse()->redirect('/');
-});
+$site->get('/redirect', fn() => $site->getResponse()->redirect_exit('/'));
 
 // 200, 302, 403
-$site->get('#^/login(/(?<token>\w+))?$#', function (array $path, Site $site) {
-    $auth = $site->getAuth();
-    $response = $site->getResponse();
-    if ($auth->getUser()) {
-        return $response->redirect('/account'); // exits
-    }
-    if (empty($path['token'])) {
-        return "<a href=\"/login/{$auth->getToken()}\">login</a>";
-    }
-    $auth->verify($path['token'])->setUser('user@example.com');
-    return $response->redirect('/account'); // exits
-});
+$site->get('#^/(?<action>login|logout)(/(?<token>\w+))?$#', LoginController::class);
 
 // 200 or 302
-$site->get('/account', function ($path, Site $site) {
-    if (!$user = $site->getAuth()->getUser()) {
-        return $site->getResponse()->redirect('/login'); // exits
-    }
-    return "Welcome, {$user}! <a href=\"/logout\">logout</a>";
-});
-
-// 302
-$site->get('/logout', function ($path, Site $site) {
-    $site->getAuth()->logout();
-    $site->getResponse()->redirect('/login') and exit;
-});
+$site->get('/account', AccountController::class);
 
 // 500
 $site->get('/error', function () {
-    $x = $x; // E_NOTICE in error.log
-    1 / 0; // E_WARNING throws ErrorException
+    1 / 0; // ErrorException
 });
 
-// arbitrary code
+// custom error page with arbitrary code
 $site->get('#^/(?<code>[0-9]+)$#', function (array $path) {
-    throw new Error($path['code']);
+    throw new HttpError($path['code']);
 });

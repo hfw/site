@@ -3,12 +3,18 @@
 namespace Helix\Site;
 
 use ArrayAccess;
+use DateTimeInterface;
 
 /**
  * Renders a template with data.
  */
-class View implements ArrayAccess, ViewableInterface
+class View implements ArrayAccess
 {
+
+    /**
+     * @var int|DateTimeInterface
+     */
+    protected $cacheTtl = 0;
 
     /**
      * Extracted to variables upon render.
@@ -37,6 +43,18 @@ class View implements ArrayAccess, ViewableInterface
     }
 
     /**
+     * The minimum TTL, considering the instance itself and any nested views.
+     *
+     * @return int|DateTimeInterface
+     */
+    public function getCacheTtl()
+    {
+        return $this->cacheTtl;
+    }
+
+    /**
+     * Returns what would be rendered.
+     *
      * @return string
      */
     public function getContent(): string
@@ -82,14 +100,24 @@ class View implements ArrayAccess, ViewableInterface
     }
 
     /**
+     * Directly outputs content.
+     *
      * Extracts `$data` to variables, and includes the template.
      * `$this` within the template references the view instance.
-     *
-     * @return void
      */
     public function render(): void
     {
         extract($this->data);
         include "{$this->template}";
+    }
+
+    /**
+     * @param int|DateTimeInterface $cacheTtl
+     * @return $this
+     */
+    public function setCacheTtl($cacheTtl)
+    {
+        $this->cacheTtl = $cacheTtl;
+        return $this;
     }
 }

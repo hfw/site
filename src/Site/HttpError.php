@@ -2,13 +2,13 @@
 
 namespace Helix\Site;
 
-use Exception;
+use RuntimeException;
 use Throwable;
 
 /**
  * An HTTP error with a user friendly message.
  */
-class Error extends Exception
+class HttpError extends RuntimeException
 {
 
     const MESSAGES = [
@@ -51,7 +51,7 @@ class Error extends Exception
 
     /**
      * @param int $code `4xx|5xx`
-     * @param string $message Defaults to the standard description.
+     * @param null|string $message Defaults to the standard description.
      * @param Throwable|null $previous
      */
     public function __construct(int $code, string $message = null, Throwable $previous = null)

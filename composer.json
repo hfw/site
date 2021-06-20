@@ -1,18 +1,26 @@
 {
   "name": "hfw/site",
+  "type": "library",
+  "description": "Minimal MVC I/O",
+  "homepage": "https://github.com/hfw/site",
+  "license": "MIT",
   "keywords": [
     "mvc",
     "router"
   ],
   "require": {
     "php": ">=7.4",
-    "ext-fileinfo": "*",
-    "ext-openssl": "*"
+    "ext-fileinfo": "*"
   },
   "autoload": {
     "psr-4": {
       "Helix\\": "src/",
       "Helix\\Site\\": "src/Site/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Helix\\Site\\Test\\": "test/src/"
     }
   }
 }

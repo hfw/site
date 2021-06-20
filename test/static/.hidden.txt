@@ -1,1 +1,7 @@
-this is a hidden file, but it's accessible because it's in the static directory.
+this is a hidden file.
+
+this is accessible at "/static/.hidden.txt" because index.php lets the "static" directory pass.
+
+this is not accessible at "/file/.hidden.txt" because index.php prevents downloading dotfiles.
+
+in real life you should do static file access/protection in the web daemon, not the index.

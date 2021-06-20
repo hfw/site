@@ -1,0 +1,12 @@
+<?php
+
+use Helix\Site\Session;
+
+/**
+ * @var Session $session
+ */
+?>
+<h1>Welcome, <?= $session->getUser() ?></h1>
+<p>
+    <a href="/logout">logout</a>
+</p>

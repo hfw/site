@@ -9,8 +9,6 @@ Route requests without overhead and respond as you like.
 [![](https://scrutinizer-ci.com/g/hfw/site/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/hfw/site)
 [![](https://scrutinizer-ci.com/g/hfw/site/badges/build.png?b=master)](https://scrutinizer-ci.com/g/hfw/site)
 
-[![](classes.png)](https://hfw.github.io/site/inherits.html)
-
 Documentation: https://hfw.github.io/site
 
 ```
@@ -25,18 +23,13 @@ Web I/O
 
 ```php
 <?php
-
 include 'vendor/autoload.php';
-
 use Helix\Site;
 use Helix\Site\View;
-
 $site = new Site;
 
 // "GET /"
-$site->get('/', function() {
-    return 'Hello World!';
-});
+$site->get('/', fn() => 'Hello World');
 
 // "GET /foo/123" (regex)
 $site->get('#^/foo/(?<id>[0-9]+)$#', function(array $path) {
@@ -48,16 +41,13 @@ $site->get('#^/foo/(?<id>[0-9]+)$#', function(array $path) {
 
 `view/foo.phtml`
 --------------
+
 ```php
 <?php
-
-use Helix\Site\View;
-
 /**
- * @var View $this
+ * @var Helix\Site\View $this
  * @var int $id 
  */
-
 echo $id;
 ```
 
@@ -71,14 +61,13 @@ Under the Hood
 Views
 -----
 
-`View` instances merely `include` their templates (`phtml` files).
-Within the scope of those files, `$this` refers to the `View` instance itself.
-Any data given to the view is converted to variables via `extract()` prior to and in the same scope as the template inclusion.
-Data can also be accessed via `ArrayAccess`. 
+`View` instances merely `include` their templates (`.phtml` files).
+
+Within the scope of those files, `$this` refers to
+the `View` instance itself. Any data given to the view is converted to variables via `extract()` in the
+same scope as the template inclusion. Data can also be accessed via `ArrayAccess`.
 
 By convention, templates should be stored in the `view` directory in the document root.
-
-Any `ViewableInterface` can be returned from a controller to be rendered, as well as plain strings.
 
 nginx config
 ------------

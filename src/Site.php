@@ -3,8 +3,9 @@
 namespace Helix;
 
 use ErrorException;
-use Helix\Site\Auth;
-use Helix\Site\Error;
+use Helix\Site\Session;
+use Helix\Site\Controller;
+use Helix\Site\HttpError;
 use Helix\Site\Request;
 use Helix\Site\Response;
 use Throwable;
@@ -14,11 +15,6 @@ use Throwable;
  */
 class Site
 {
-
-    /**
-     * @var Auth
-     */
-    protected $auth;
 
     /**
      * @var bool
@@ -36,93 +32,94 @@ class Site
     protected $response;
 
     /**
+     * @var Session
+     */
+    protected $session;
+
+    /**
      * Initializes the system for routing, error handling, and output.
      */
     public function __construct()
     {
         error_reporting(E_ALL);
-        set_error_handler([$this, '_onRaise']);
+        register_shutdown_function(fn() => $this->_onShutdown());
+        set_error_handler(fn(...$args) => $this->_onRaise(...$args));
+        set_exception_handler(fn(Throwable $error) => $this->_onException($error));
         $this->request = new Request();
         $this->response = new Response($this);
         $this->setDev(php_sapi_name() === 'cli-server');
-        set_exception_handler([$this, '_onException']);
-        error_reporting(E_RECOVERABLE_ERROR | E_WARNING | E_USER_ERROR | E_USER_WARNING);
     }
 
     /**
      * Handles uncaught exceptions and exits.
      *
      * @param Throwable $error
-     * @return void
+     * @internal
      */
-    public function _onException(Throwable $error): void
+    protected function _onException(Throwable $error): void
     {
-        if (!$error instanceof Error) {
+        if ($error instanceof HttpError) {
+            if ($error->getCode() >= 500) {
+                $this->log($error->getCode(), $error);
+            }
+        } else {
             $this->log(500, "[{$error->getCode()}] {$error}");
-        } elseif ($error->getCode() >= 500) {
-            $this->log($error->getCode(), $error);
         }
-        $this->response->error($error) and exit;
+        $this->response->error_exit($error);
     }
 
     /**
-     * Handles raised PHP errors by throwing or logging them,
-     * depending on whether they're in `error_reporting()`
+     * Handles raised PHP errors (`E_NOTICE`, `E_WARNING`, etc) by throwing them.
      *
      * @param int $code
      * @param string $message
      * @param string $file
      * @param int $line
      * @throws ErrorException
+     * @internal
      */
-    public function _onRaise(int $code, string $message, string $file, int $line)
+    protected function _onRaise(int $code, string $message, string $file, int $line)
     {
-        $type = [
-            E_DEPRECATED => 'E_DEPRECATED',
-            E_NOTICE => 'E_NOTICE',
-            E_RECOVERABLE_ERROR => 'E_RECOVERABLE_ERROR',
-            E_WARNING => 'E_WARNING',
-            E_USER_ERROR => 'E_USER_ERROR',
-            E_USER_DEPRECATED => 'E_USER_DEPRECATED',
-            E_USER_NOTICE => 'E_USER_NOTICE',
-            E_USER_WARNING => 'E_USER_WARNING',
-        ][$code];
-        if (error_reporting() & $code) {
-            throw new ErrorException("{$type}: {$message}", $code, 1, $file, $line);
+        error_clear_last();
+        throw new ErrorException($message, $code, 1, $file, $line);
+    }
+
+    /**
+     * A last-ditch effort to catch fatal PHP errors which aren't intercepted by {@link Site::_onRaise()}
+     *
+     * @internal
+     */
+    protected function _onShutdown(): void
+    {
+        if ($fatal = error_get_last()) {
+            // can't throw, we're shutting down. call the exception handler directly.
+            $fatal = new ErrorException($fatal['message'], $fatal['type'], 1, $fatal['file'], $fatal['line']);
+            $this->_onException($fatal);
         }
-        $this->log($type, "{$message} in {$file}:{$line}");
     }
 
     /**
      * Routes `DELETE`
      *
      * @param string $path
-     * @param callable $controller
-     * @return void
+     * @param string|callable $controller
+     * @param array $extra
      */
-    public function delete(string $path, callable $controller): void
+    public function delete(string $path, $controller, array $extra = []): void
     {
-        $this->route(['DELETE'], $path, $controller);
+        $this->route(['DELETE'], $path, $controller, $extra);
     }
 
     /**
      * Routes `GET` and `HEAD`
      *
      * @param string $path
-     * @param callable $controller
-     * @return void
+     * @param string|callable $controller
+     * @param array $extra
      */
-    public function get(string $path, callable $controller): void
+    public function get(string $path, $controller, array $extra = []): void
     {
-        $this->route(['GET', 'HEAD'], $path, $controller);
-    }
-
-    /**
-     * @return Auth
-     */
-    final public function getAuth()
-    {
-        return $this->auth ?? $this->auth = new Auth($this);
+        $this->route(['GET', 'HEAD'], $path, $controller, $extra);
     }
 
     /**
@@ -136,9 +133,17 @@ class Site
     /**
      * @return Response
      */
-    final public function getResponse()
+    public function getResponse()
     {
         return $this->response;
+    }
+
+    /**
+     * @return Session
+     */
+    final public function getSession()
+    {
+        return $this->session ??= new Session($this);
     }
 
     /**
@@ -170,23 +175,24 @@ class Site
      * Routes `POST`
      *
      * @param string $path
-     * @param callable $controller
+     * @param string|callable $controller
+     * @param array $extra
      */
-    public function post(string $path, callable $controller): void
+    public function post(string $path, $controller, array $extra = []): void
     {
-        $this->route(['POST'], $path, $controller);
+        $this->route(['POST'], $path, $controller, $extra);
     }
 
     /**
      * Routes `PUT`
      *
      * @param string $path
-     * @param callable $controller
-     * @return void
+     * @param string|callable $controller
+     * @param array $extra
      */
-    public function put(string $path, callable $controller): void
+    public function put(string $path, $controller, array $extra = []): void
     {
-        $this->route(['PUT'], $path, $controller);
+        $this->route(['PUT'], $path, $controller, $extra);
     }
 
     /**
@@ -195,10 +201,10 @@ class Site
      *
      * @param string[] $methods
      * @param string $path
-     * @param callable $controller `(string[] $match, Site $site):mixed`
-     * @return void
+     * @param string|callable $controller Controller class, or callable.
+     * @param array $extra
      */
-    protected function route(array $methods, string $path, callable $controller): void
+    public function route(array $methods, string $path, $controller, array $extra): void
     {
         $match = [];
         if ($path[0] !== '/') {
@@ -209,11 +215,35 @@ class Site
         if ($match) {
             if (in_array($this->request->getMethod(), $methods)) {
                 $this->response->setCode(200);
-                $content = call_user_func($controller, $match, $this);
-                $this->response->mixed($content) and exit;
+                $this->route_call_exit($match, $controller, $extra);
             }
             $this->response->setCode(405);
         }
+    }
+
+    /**
+     * @param string[] $path
+     * @param string|callable $controller
+     * @param array $extra
+     * @uses Controller::delete()
+     * @uses Controller::get()
+     * @uses Controller::post()
+     * @uses Controller::put()
+     * @uses Controller::__call()
+     */
+    protected function route_call_exit(array $path, $controller, array $extra): void
+    {
+        if (is_string($controller)) {
+            assert(is_a($controller, Controller::class, true));
+            /** @var Controller $controller */
+            $controller = new $controller($this, $path, $extra);
+            $method = $this->request->getMethod();
+            $content = $controller->{$method}(); // calls are not case sensitive
+        } else {
+            assert(is_callable($controller));
+            $content = call_user_func($controller, $path, $this);
+        }
+        $this->response->mixed_exit($content);
     }
 
     /**

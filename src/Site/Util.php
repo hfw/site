@@ -11,10 +11,10 @@ class Util
     /**
      * Joins string pieces and formats it as an absolute path.
      *
-     * @param string[] $args
+     * @param string ...$args
      * @return string
      */
-    public static function path(...$args): string
+    public static function path(string ...$args): string
     {
         $path = trim(implode('/', $args), '/');
         $path = preg_replace('/\/+/', '/', $path);
@@ -24,10 +24,10 @@ class Util
     /**
      * Joins string pieces and formats it as a human friendly slug.
      *
-     * @param string[] $args
+     * @param string ...$args
      * @return string
      */
-    public static function slug(...$args): string
+    public static function slug(string ...$args): string
     {
         $slug = strtolower(implode('-', $args));
         $slug = preg_replace('/([^a-z0-9]+)/', '-', $slug);
