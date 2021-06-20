@@ -24,7 +24,7 @@ class LoginController extends Controller
         }
 
         // authenticate the user and redirect to their account page
-        if ($token = $this->path['token'] ?? null) {
+        if ($token = $this['token']) {
             $session->verify($token)->setUser('user@example.com');
             $this->redirect_exit('/account');
         }

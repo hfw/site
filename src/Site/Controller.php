@@ -2,12 +2,13 @@
 
 namespace Helix\Site;
 
+use ArrayAccess;
 use Helix\Site;
 
 /**
  * A controller.
  */
-class Controller
+class Controller implements ArrayAccess
 {
 
     /**
@@ -20,7 +21,9 @@ class Controller
     /**
      * The path's regex match from routing.
      *
-     * @var string[]
+     * `ArrayAccess` forwards to this.
+     *
+     * @var array
      */
     protected $path;
 
@@ -84,6 +87,41 @@ class Controller
     public function head()
     {
         return $this->get();
+    }
+
+    /**
+     * @param mixed $offset
+     * @return bool
+     */
+    public function offsetExists($offset): bool
+    {
+        return isset($this->path[$offset]);
+    }
+
+    /**
+     * @param mixed $offset
+     * @return null|mixed Coalesces to `null`
+     */
+    public function offsetGet($offset)
+    {
+        return $this->path[$offset] ?? null;
+    }
+
+    /**
+     * @param mixed $offset
+     * @param mixed $value
+     */
+    public function offsetSet($offset, $value): void
+    {
+        $this->path[$offset] = $value;
+    }
+
+    /**
+     * @param mixed $offset
+     */
+    public function offsetUnset($offset): void
+    {
+        unset($this->path[$offset]);
     }
 
     /**
