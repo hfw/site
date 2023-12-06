@@ -3,7 +3,9 @@ Helix::Site
 
 Route requests without overhead and respond as you like.
 
-[![](https://img.shields.io/badge/PHP->=7.4-666999)](https://www.php.net)
+When you just need an small MVC to do a thing.
+
+[![](https://img.shields.io/badge/PHP->=8.1-666999)](https://www.php.net)
 [![](https://img.shields.io/badge/packagist-a50)](https://packagist.org/packages/hfw/site)
 [![](https://img.shields.io/badge/license-MIT-black)](LICENSE.txt)
 [![](https://scrutinizer-ci.com/g/hfw/site/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/hfw/site)
@@ -25,15 +27,15 @@ Web I/O
 <?php
 include 'vendor/autoload.php';
 use Helix\Site;
-use Helix\Site\View;
+use Helix\Site\Response\View;
 $site = new Site;
 
 // "GET /"
 $site->get('/', fn() => 'Hello World');
 
 // "GET /foo/123" (regex)
-$site->get('#^/foo/(?<id>[0-9]+)$#', function(array $path) {
-    return new View('view/foo.phtml', [
+$site->get('#^/foo/(?<id>[0-9]+)$#', function(array $path, Site $site) {
+    return new View($site, 'view/foo.phtml', [
         'id' => (int)$path['id']
     ]);
 });
@@ -45,7 +47,7 @@ $site->get('#^/foo/(?<id>[0-9]+)$#', function(array $path) {
 ```php
 <?php
 /**
- * @var Helix\Site\View $this
+ * @var Helix\Site\Response\View $this
  * @var int $id 
  */
 echo $id;
@@ -65,7 +67,7 @@ Views
 
 Within the scope of those files, `$this` refers to
 the `View` instance itself. Any data given to the view is converted to variables via `extract()` in the
-same scope as the template inclusion. Data can also be accessed via `ArrayAccess`.
+same scope as the template inclusion.
 
 By convention, templates should be stored in the `view` directory in the document root.
 

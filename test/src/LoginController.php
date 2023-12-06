@@ -3,33 +3,34 @@
 namespace Helix\Site\Test;
 
 use Helix\Site\Controller;
-use Helix\Site\View;
+use Helix\Site\Response;
+use Helix\Site\Response\View;
 
 class LoginController extends Controller
 {
 
-    public function get()
+    public function onGet(): Response
     {
-        $session = $this->site->getSession();
+        $s = $this->site->getSession();
 
         // logout whenever
-        if ($this->path['action'] === 'logout') {
-            $session->logout();
-            $this->redirect_exit('/login');
+        if ($this['action'] === 'logout') {
+            $s->logout();
+            return $this->site->redirect('/login');
         }
 
         // redirect already-authenticated users to their account page
-        if ($session->getUser()) {
-            $this->redirect_exit('/account');
+        if ($s->getUser()) {
+            return $this->site->redirect('/account');
         }
 
         // authenticate the user and redirect to their account page
         if ($token = $this['token']) {
-            $session->verify($token)->setUser('user@example.com');
-            $this->redirect_exit('/account');
+            $s->verify($token)->setUser('user@example.com');
+            return $this->site->redirect('/account');
         }
 
         // show the login page
-        return new View('view/login.phtml', ['csrf' => $session->getToken()]);
+        return new View($this->site, 'view/login.phtml', ['csrf' => $s->getToken()]);
     }
 }

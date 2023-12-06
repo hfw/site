@@ -14,27 +14,33 @@ class Session implements ArrayAccess
     /**
      * @var Site
      */
-    protected $site;
+    public readonly Site $site;
 
     /**
-     * Starts the session and initializes the CSRF token.
+     * Starts the session.
      *
      * @param Site $site
+     * @param int $ttl Sessions may only last this many seconds, relative to when they're brand new.
+     *                  This only affects new sessions, not resumed sessions.
+     *                  A "remember me" login would be a reasonably large number.
+     *                  Zero (default) means until the browser closes.
      */
-    public function __construct(Site $site)
+    public function __construct(Site $site, int $ttl = 0)
     {
         $this->site = $site;
-        session_set_cookie_params(0, '/', null, !$site->isDev(), true);
+        session_cache_limiter(''); // let Response decide the headers
+        session_set_cookie_params($ttl, '/', null, !$site->dev, true);
         session_start();
-        $_SESSION['__csrf'] ??= bin2hex(random_bytes(8));
     }
 
     /**
+     * Initializes/returns the random CSRF token.
+     *
      * @return string
      */
     public function getToken(): string
     {
-        return $_SESSION['__csrf'];
+        return $this['__csrf'] ??= bin2hex(random_bytes(8));
     }
 
     /**
@@ -42,9 +48,9 @@ class Session implements ArrayAccess
      *
      * @return mixed
      */
-    public function getUser()
+    public function getUser(): mixed
     {
-        return $_SESSION['__user'] ?? null;
+        return $this['__user'] ?? null;
     }
 
     /**
@@ -52,7 +58,7 @@ class Session implements ArrayAccess
      */
     public function logout(): void
     {
-        setcookie(session_name(), null, 1);
+        setcookie(session_name(), '', 0);
         session_destroy();
     }
 
@@ -60,16 +66,16 @@ class Session implements ArrayAccess
      * @param mixed $offset
      * @return bool
      */
-    public function offsetExists($offset): bool
+    public function offsetExists(mixed $offset): bool
     {
         return isset($_SESSION[$offset]);
     }
 
     /**
      * @param mixed $offset
-     * @return mixed Coalesces to `null`
+     * @return mixed
      */
-    public function offsetGet($offset)
+    public function offsetGet(mixed $offset): mixed
     {
         return $_SESSION[$offset] ?? null;
     }
@@ -78,7 +84,7 @@ class Session implements ArrayAccess
      * @param mixed $offset
      * @param mixed $value
      */
-    public function offsetSet($offset, $value): void
+    public function offsetSet(mixed $offset, mixed $value): void
     {
         $_SESSION[$offset] = $value;
     }
@@ -86,7 +92,7 @@ class Session implements ArrayAccess
     /**
      * @param mixed $offset
      */
-    public function offsetUnset($offset): void
+    public function offsetUnset(mixed $offset): void
     {
         unset($_SESSION[$offset]);
     }
@@ -97,25 +103,23 @@ class Session implements ArrayAccess
      * @param mixed $user
      * @return $this
      */
-    public function setUser($user)
+    public function setUser(mixed $user): static
     {
-        $_SESSION['__user'] = $user;
+        $this['__user'] = $user;
         return $this;
     }
 
     /**
      * Checks the given CSRF token against what we expect.
      *
-     * If they don't match, a `403` is logged and thrown.
+     * If they don't match, a `403` is thrown.
      *
-     * @param $token
+     * @param mixed $token
      * @return $this
-     * @throws HttpError
      */
-    public function verify($token)
+    public function verify(mixed $token): static
     {
         if ($token !== $this->getToken()) {
-            $this->site->log(403, 'Invalid CSRF token.');
             throw new HttpError(403, 'Invalid CSRF token.');
         }
         return $this;

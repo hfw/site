@@ -1,0 +1,32 @@
+<?php
+
+namespace Helix\Site;
+
+use Helix\Site\Response\ErrorView;
+
+/**
+ * @var ErrorView $this
+ */
+
+if ($this->error instanceof HttpError) {
+    $message = $this->error->getMessage();
+} elseif ($this->site->dev) {
+    $message = "[{$this->error->getCode()}] $this->error";
+} else {
+    $message = 'Internal Server Error';
+}
+?>
+<html lang="en">
+<head>
+    <title><?= $this->code ?></title>
+</head>
+<body>
+<h1><?= $this->code ?></h1>
+<pre><?= $message ?></pre>
+<?php
+if ($this->code >= 500): ?>
+    <pre>Reference #<?= $this->site->trace ?></pre>
+<?php
+endif ?>
+</body>
+</html>

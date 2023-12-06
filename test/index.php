@@ -9,14 +9,15 @@ include_once '../vendor/autoload.php';
 
 use Helix\Site;
 use Helix\Site\HttpError;
+use Helix\Site\Response\JSON;
+use Helix\Site\Response\View;
 use Helix\Site\Test\AccountController;
 use Helix\Site\Test\LoginController;
-use Helix\Site\View;
 
 $site = new Site;
 
 // 200
-$site->get('/', fn() => new View('view/index.phtml'));
+$site->get('/', fn() => new View($site, 'view/index.phtml'));
 
 // 200
 $site->get('/empty', fn() => '');
@@ -26,19 +27,22 @@ $site->get('/echo', function () {
     echo 'echo';
 });
 
+$site->get('/json', function ($p, Site $s) {
+    return new JSON($s, 'foo');
+});
+
 // 200
 $site->get('/headers', function () use ($site) {
-    $site->getResponse()['Content-Type'] = 'text/plain';
-    var_export($site->getRequest()->getHeaders());
+    var_export($site->request->headers);
 });
 
 // 200, 206, 404, 416
 $site->get('#^/file/(?<name>[^./].*)$#', function (array $path, Site $site) {
-    $site->getResponse()->setCacheTtl(10)->file_exit("static/{$path['name']}");
+    return $site->redirect("/static/{$path['name']}")->setTtl(10);
 });
 
 // 302
-$site->get('/redirect', fn() => $site->getResponse()->redirect_exit('/'));
+$site->get('/redirect', fn() => $site->redirect('/'));
 
 // 200, 302, 403
 $site->get('#^/(?<action>login|logout)(/(?<token>\w+))?$#', LoginController::class);
@@ -48,8 +52,12 @@ $site->get('/account', AccountController::class);
 
 // 500
 $site->get('/error', function () {
-    1 / 0; // ErrorException
+    $zero = 0;
+    echo 1 / $zero; // ErrorException
 });
+
+// 405 for GET
+$site->put('/put', fn() => 'ok');
 
 // custom error page with arbitrary code
 $site->get('#^/(?<code>[0-9]+)$#', function (array $path) {

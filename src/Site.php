@@ -2,12 +2,16 @@
 
 namespace Helix;
 
+use Closure;
 use ErrorException;
-use Helix\Site\Session;
 use Helix\Site\Controller;
 use Helix\Site\HttpError;
 use Helix\Site\Request;
 use Helix\Site\Response;
+use Helix\Site\Response\ErrorView;
+use Helix\Site\Response\Redirect;
+use Helix\Site\Response\Text;
+use Helix\Site\Session;
 use Throwable;
 
 /**
@@ -17,59 +21,135 @@ class Site
 {
 
     /**
+     * Whether the site was instantiated in dev-mode.
+     *
+     * Enables verbose logging and exposed errors.
+     *
+     * Defaults to whether we're running in the `cli-server`.
+     *
      * @var bool
      */
-    protected $dev = false;
+    public readonly bool $dev;
+
+    /**
+     * Timestamp of when the instance was created.
+     *
+     * @var int
+     */
+    public readonly int $now;
+
+    /**
+     * Trust client IP forwarding from these proxy IP addresses.
+     *
+     * @var string[]
+     */
+    protected array $proxies = [];
 
     /**
      * @var Request
      */
-    protected $request;
+    public readonly Request $request;
 
     /**
+     * The tentative response.
+     *
+     * This is initialized to `404`, potentially set to `405` during routing,
+     * then set to the actual response from a matched controller.
+     *
      * @var Response
      */
-    protected $response;
+    protected Response $response;
 
     /**
      * @var Session
      */
-    protected $session;
+    protected readonly Session $session;
+
+    /**
+     * A unique ID per instance, used in logging and the response.
+     *
+     * @var string
+     */
+    public readonly string $trace;
 
     /**
      * Initializes the system for routing, error handling, and output.
+     *
+     * @param null|bool $dev
      */
-    public function __construct()
+    public function __construct(bool $dev = null)
     {
         error_reporting(E_ALL);
-        register_shutdown_function(fn() => $this->_onShutdown());
-        set_error_handler(fn(...$args) => $this->_onRaise(...$args));
-        set_exception_handler(fn(Throwable $error) => $this->_onException($error));
-        $this->request = new Request();
-        $this->response = new Response($this);
-        $this->setDev(php_sapi_name() === 'cli-server');
+        $this->now = time();
+        $this->dev = $dev ?? (php_sapi_name() === 'cli-server');
+        ob_end_clean(); // disable implied output buffer.
+        ob_implicit_flush(); // flush() immediately on output
+        header_register_callback($this->respond_headers(...));
+        set_exception_handler($this->_onException(...)); // log and exit
+        set_error_handler($this->_onWarning(...)); // throw to _onException
+        register_shutdown_function($this->_onShutdown(...)); // ensure response
+        $this->request = $this->factory(Request::class, $this);
+        $this->response = $this->factory(Text::class, $this)->setCode(404); // assume no route
+        $this->trace = uniqid();
     }
 
     /**
-     * Handles uncaught exceptions and exits.
+     * Logs uncaught exceptions and responds with an {@link ErrorView}.
      *
      * @param Throwable $error
      * @internal
      */
-    protected function _onException(Throwable $error): void
+    protected function _onException(Throwable $error): never
     {
         if ($error instanceof HttpError) {
             if ($error->getCode() >= 500) {
-                $this->log($error->getCode(), $error);
+                $this->_onException_log($error->getCode(), $error);
             }
         } else {
-            $this->log(500, "[{$error->getCode()}] {$error}");
+            $this->_onException_log(500, "[{$error->getCode()}] {$error}");
         }
-        $this->response->error_exit($error);
+        $this->respond($error);
     }
 
     /**
-     * Handles raised PHP errors (`E_NOTICE`, `E_WARNING`, etc) by throwing them.
+     * Logs exceptions to `error.log`
+     *
+     * @param string $code
+     * @param string $message
+     * @return $this
+     * @internal
+     */
+    protected function _onException_log(string $code, string $message): static
+    {
+        error_log(sprintf("%s %s %s %s %s %s - %s\n\n",
+            date('Y-m-d H:i:s'),
+            $code,
+            $this->trace,
+            $this->request->getIp(),
+            $this->request->method,
+            $this->request->path,
+            $message
+        ), 3, 'error.log');
+        return $this;
+    }
+
+    /**
+     * Ensures a response is sent.
+     *
+     * @internal
+     */
+    protected function _onShutdown(): void
+    {
+        if (!headers_sent()) { // respond() wasn't called
+            if ($fatal = error_get_last()) { // unhandled, must be fatal
+                $this->_onException(new ErrorException($fatal['message'], $fatal['type'], 1, $fatal['file'], $fatal['line']));
+            }
+            $this->respond(new HttpError($this->response->getCode())); // 404/405
+        }
+    }
+
+    /**
+     * Throws raised PHP warnings/notices.
      *
      * @param int $code
      * @param string $message
@@ -78,181 +158,196 @@ class Site
      * @throws ErrorException
      * @internal
      */
-    protected function _onRaise(int $code, string $message, string $file, int $line)
+    protected function _onWarning(int $code, string $message, string $file, int $line): never
     {
         error_clear_last();
         throw new ErrorException($message, $code, 1, $file, $line);
     }
 
     /**
-     * A last-ditch effort to catch fatal PHP errors which aren't intercepted by {@link Site::_onRaise()}
-     *
-     * @internal
-     */
-    protected function _onShutdown(): void
-    {
-        if ($fatal = error_get_last()) {
-            // can't throw, we're shutting down. call the exception handler directly.
-            $fatal = new ErrorException($fatal['message'], $fatal['type'], 1, $fatal['file'], $fatal['line']);
-            $this->_onException($fatal);
-        }
-    }
-
-    /**
      * Routes `DELETE`
      *
      * @param string $path
-     * @param string|callable $controller
-     * @param array $extra
+     * @param class-string<Controller>|Controller|Closure(array $matched, static $this):mixed $controller
      */
-    public function delete(string $path, $controller, array $extra = []): void
+    public function delete(string $path, string|Controller|Closure $controller): void
     {
-        $this->route(['DELETE'], $path, $controller, $extra);
+        $this->route(['DELETE'], $path, $controller);
+    }
+
+    /**
+     * Centralized `new`.
+     *
+     * @template T
+     * @param class-string<T> $class
+     * @param mixed ...$args
+     * @return T
+     */
+    public function factory(string $class, ...$args)
+    {
+        return new $class(...$args);
     }
 
     /**
      * Routes `GET` and `HEAD`
      *
      * @param string $path
-     * @param string|callable $controller
-     * @param array $extra
+     * @param class-string<Controller>|Controller|Closure(array $matched, static $this):mixed $controller
      */
-    public function get(string $path, $controller, array $extra = []): void
+    public function get(string $path, string|Controller|Closure $controller): void
     {
-        $this->route(['GET', 'HEAD'], $path, $controller, $extra);
+        $this->route(['GET', 'HEAD'], $path, $controller);
     }
 
     /**
-     * @return Request
+     * @return string[]
      */
-    final public function getRequest()
+    public function getProxies(): array
     {
-        return $this->request;
+        return $this->proxies;
     }
 
     /**
-     * @return Response
-     */
-    public function getResponse()
-    {
-        return $this->response;
-    }
-
-    /**
+     * @param int $ttl {@link Session::__construct()}
      * @return Session
      */
-    final public function getSession()
+    final public function getSession(int $ttl = 0): Session
     {
-        return $this->session ??= new Session($this);
+        return $this->session ??= $this->factory(Session::class, $this, $ttl);
     }
 
     /**
+     * Whether the session was started/accessed.
      * @return bool
      */
-    final public function isDev(): bool
+    final public function hasSession(): bool
     {
-        return $this->dev;
-    }
-
-    /**
-     * @param mixed $code
-     * @param string $message
-     * @return $this
-     */
-    public function log($code, string $message)
-    {
-        $now = date('Y-m-d H:i:s');
-        $id = $this->response->getId();
-        $ip = $this->request->getClient();
-        $method = $this->request->getMethod();
-        $path = $this->request->getPath();
-        $line = "{$now} {$code} {$id} {$ip} {$method} {$path} - {$message}\n\n";
-        error_log($line, 3, 'error.log');
-        return $this;
+        return isset($this->session);
     }
 
     /**
      * Routes `POST`
      *
      * @param string $path
-     * @param string|callable $controller
-     * @param array $extra
+     * @param class-string<Controller>|Controller|Closure(array $matched, static $this):mixed $controller
      */
-    public function post(string $path, $controller, array $extra = []): void
+    public function post(string $path, string|Controller|Closure $controller): void
     {
-        $this->route(['POST'], $path, $controller, $extra);
+        $this->route(['POST'], $path, $controller);
     }
 
     /**
      * Routes `PUT`
      *
      * @param string $path
-     * @param string|callable $controller
-     * @param array $extra
+     * @param class-string<Controller>|Controller|Closure(array $matched, static $this):mixed $controller
      */
-    public function put(string $path, $controller, array $extra = []): void
+    public function put(string $path, string|Controller|Closure $controller): void
     {
-        $this->route(['PUT'], $path, $controller, $extra);
+        $this->route(['PUT'], $path, $controller);
     }
 
     /**
-     * Invokes a controller if the HTTP method and path match, and exits.
+     * Factory alias.
+     *
+     * @param string $location
+     * @param int $code
+     * @return Redirect
+     */
+    public function redirect(string $location, int $code = 302): Redirect
+    {
+        return $this->factory(Redirect::class, $this, $location, $code);
+    }
+
+    /**
+     * @param null|string|Response|Throwable $response
+     * @return never
+     */
+    protected function respond(mixed $response): never
+    {
+        if ($response instanceof Response) {
+            $this->response = $response;
+        } elseif ($response instanceof Throwable) {
+            $this->response = $this->factory(ErrorView::class, $this, $response);
+        } else {
+            $this->response->value = $response;
+        }
+        if (!$this->response->isModified()) {
+            $this->response->setCode(304);
+        }
+        if ($this->dev) {
+            // log to sapi
+            error_log(sprintf('%s [%s]: %s %s',
+                $this->request->getIp(),
+                $this->response->getCode(),
+                $this->request->method,
+                $this->request->path
+            ), 4);
+        }
+        if (!$this->response->isEmpty()) {
+            $this->response->render();
+        }
+        flush();
+        exit;
+    }
+
+    /**
+     * @return void
+     */
+    protected function respond_headers(): void
+    {
+        header_remove('X-Powered-By');
+        foreach ($this->response->getHeaders() as $key => $value) {
+            if (is_string($key)) {
+                $value = "{$key}: {$value}";
+            }
+            header($value);
+        }
+        if (isset($this->request['X-Request-Id'])) {
+            header("X-Request-Id: {$this->request['X-Request-Id']}");
+        }
+        header("X-Response-Id: {$this->trace}");
+        http_response_code($this->response->getCode());
+    }
+
+    /**
+     * Invokes a controller if the HTTP method and path match, and responds with what it returns.
+     *
      * Absolute paths must start with `/`, all other paths are treated as regular expressions.
+     * Therefore, do not enclose regular expressions within `/`.
      *
      * @param string[] $methods
      * @param string $path
-     * @param string|callable $controller Controller class, or callable.
-     * @param array $extra
+     * @param class-string<Controller>|Controller|Closure(array $matched, static $this):mixed $controller
      */
-    public function route(array $methods, string $path, $controller, array $extra): void
+    public function route(array $methods, string $path, string|Controller|Closure $controller): void
     {
-        $match = [];
+        $matched = [];
         if ($path[0] !== '/') {
-            preg_match($path, $this->request->getPath(), $match);
-        } elseif ($path === $this->request->getPath()) {
-            $match = [$path];
+            preg_match($path, $this->request->path, $matched);
+        } elseif ($path === $this->request->path) {
+            $matched = [$path];
         }
-        if ($match) {
-            if (in_array($this->request->getMethod(), $methods)) {
+        if ($matched) {
+            if (in_array($this->request->method, $methods)) {
                 $this->response->setCode(200);
-                $this->route_call_exit($match, $controller, $extra);
+                if (is_string($controller) and is_a($controller, Controller::class, true)) {
+                    $controller = $this->factory($controller, $this, $matched);
+                }
+                /** @var Controller|Closure $controller */
+                $this->respond($controller->__invoke($matched, $this));
             }
-            $this->response->setCode(405);
+            $this->response->setCode(405); // matched but no method supported, continue to next route.
         }
     }
 
     /**
-     * @param string[] $path
-     * @param string|callable $controller
-     * @param array $extra
-     * @uses Controller::delete()
-     * @uses Controller::get()
-     * @uses Controller::post()
-     * @uses Controller::put()
-     * @uses Controller::__call()
-     */
-    protected function route_call_exit(array $path, $controller, array $extra): void
-    {
-        if (is_string($controller)) {
-            assert(is_a($controller, Controller::class, true));
-            /** @var Controller $controller */
-            $controller = new $controller($this, $path, $extra);
-            $method = $this->request->getMethod();
-            $content = $controller->{$method}(); // calls are not case sensitive
-        } else {
-            assert(is_callable($controller));
-            $content = call_user_func($controller, $path, $this);
-        }
-        $this->response->mixed_exit($content);
-    }
-
-    /**
-     * @param bool $dev
+     * @param string[] $proxies
      * @return $this
      */
-    public function setDev(bool $dev)
+    public function setProxies(array $proxies): static
     {
-        $this->dev = $dev;
+        $this->proxies = $proxies;
         return $this;
     }
 }

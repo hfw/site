@@ -22,14 +22,14 @@ class Util
     }
 
     /**
-     * Joins string pieces and formats it as a human friendly slug.
+     * Formats a string as a human-friendly slug.
      *
-     * @param string ...$args
+     * @param string $string
      * @return string
      */
-    public static function slug(string ...$args): string
+    public static function slug(string $string): string
     {
-        $slug = strtolower(implode('-', $args));
+        $slug = strtolower($string);
         $slug = preg_replace('/([^a-z0-9]+)/', '-', $slug);
         $slug = preg_replace('/-+/', '-', $slug);
         return trim($slug, '-');

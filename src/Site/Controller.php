@@ -4,65 +4,95 @@ namespace Helix\Site;
 
 use ArrayAccess;
 use Helix\Site;
+use LogicException;
 
 /**
- * A controller.
+ * A controller invoked by {@link Site::route()}
  */
 class Controller implements ArrayAccess
 {
 
     /**
-     * Extra arguments from the router.
+     * The matched path from {@link Site::route()}.
      *
-     * @var array
+     * @var string[]
      */
-    protected array $extra;
-
-    /**
-     * The path's regex match from routing.
-     *
-     * `ArrayAccess` forwards to this.
-     *
-     * @var array
-     */
-    protected $path;
+    public readonly array $route;
 
     /**
      * @var Site
      */
-    protected $site;
+    public readonly Site $site;
 
     /**
      * @param Site $site
-     * @param string[] $path
-     * @param array $extra
+     * @param string[] $route
      */
-    public function __construct(Site $site, array $path, array $extra = [])
+    public function __construct(Site $site, array $route)
     {
         $this->site = $site;
-        $this->path = $path;
-        $this->extra = $extra;
+        $this->route = $route;
     }
 
     /**
-     * Throws `HTTP 501 Not Implemented` as a catch-all for any unimplemented non-standard request methods.
+     * Called by {@link Site::route()} when matched.
      *
-     * @param string $method
-     * @param array $args
+     * @return mixed
      */
-    final public function __call(string $method, array $args)
+    public function __invoke(): mixed
     {
-        throw new HttpError(501);
+        return match ($this->site->request->method) {
+            'GET', 'HEAD' => $this->onGet(),
+            'POST' => $this->onPost(),
+            'PUT' => $this->onPut(),
+            'DELETE' => $this->onDelete(),
+            default => throw new HttpError(501)
+        };
+    }
+
+    /**
+     * @param mixed $offset
+     * @return bool
+     */
+    final public function offsetExists(mixed $offset): bool
+    {
+        return isset($this->route[$offset]);
+    }
+
+    /**
+     * @param mixed $offset
+     * @return null|string
+     */
+    final public function offsetGet(mixed $offset): ?string
+    {
+        return $this->route[$offset] ?? null;
+    }
+
+    /**
+     * @param mixed $offset
+     * @param mixed $value
+     */
+    final public function offsetSet(mixed $offset, mixed $value): never
+    {
+        throw new LogicException("The controller's matched route is immutable.");
+    }
+
+    /**
+     * @param mixed $offset
+     */
+    final public function offsetUnset(mixed $offset): void
+    {
+        throw new LogicException("The controller's matched route is immutable.");
     }
 
     /**
      * Handles `DELETE`
      *
-     * This stub throws `HTTP 501 Not Implemented`
+     * Base stub throws `HTTP 501 Not Implemented`
      *
-     * @return void|string|View
+     * @return mixed
      */
-    public function delete()
+    public function onDelete(): mixed
     {
         throw new HttpError(501);
     }
@@ -70,11 +100,11 @@ class Controller implements ArrayAccess
     /**
      * Handles `GET`
      *
-     * This stub throws `HTTP 501 Not Implemented`
+     * Base stub throws `HTTP 501 Not Implemented`
      *
-     * @return void|string|View
+     * @return mixed
      */
-    public function get()
+    public function onGet(): mixed
     {
         throw new HttpError(501);
     }
@@ -82,56 +112,24 @@ class Controller implements ArrayAccess
     /**
      * Handles `HEAD`
      *
-     * This stub returns from {@link Controller::get()}
+     * Base stub returns from {@link self::onGet()},
+     * since `HEAD` requests never have a response body rendered anyway.
+     *
+     * @return mixed
      */
-    public function head()
+    public function onHead(): mixed
     {
-        return $this->get();
-    }
-
-    /**
-     * @param mixed $offset
-     * @return bool
-     */
-    public function offsetExists($offset): bool
-    {
-        return isset($this->path[$offset]);
-    }
-
-    /**
-     * @param mixed $offset
-     * @return null|mixed Coalesces to `null`
-     */
-    public function offsetGet($offset)
-    {
-        return $this->path[$offset] ?? null;
-    }
-
-    /**
-     * @param mixed $offset
-     * @param mixed $value
-     */
-    public function offsetSet($offset, $value): void
-    {
-        $this->path[$offset] = $value;
-    }
-
-    /**
-     * @param mixed $offset
-     */
-    public function offsetUnset($offset): void
-    {
-        unset($this->path[$offset]);
+        return $this->onGet();
     }
 
     /**
      * Handles `POST`
      *
-     * This stub throws `HTTP 501 Not Implemented`
+     * Base stub throws `HTTP 501 Not Implemented`
      *
-     * @return void|string|View
+     * @return mixed
      */
-    public function post()
+    public function onPost(): mixed
     {
         throw new HttpError(501);
     }
@@ -139,23 +137,12 @@ class Controller implements ArrayAccess
     /**
      * Handles `PUT`
      *
-     * This stub throws `HTTP 501 Not Implemented`
+     * Base stub throws `HTTP 501 Not Implemented`
      *
-     * @return void|string|View
+     * @return mixed
      */
-    public function put()
+    public function onPut(): mixed
     {
         throw new HttpError(501);
-    }
-
-    /**
-     * Forwards to {@link Response::redirect_exit()}
-     *
-     * @param string $path
-     * @param int $code
-     */
-    protected function redirect_exit(string $path, int $code = 302)
-    {
-        $this->site->getResponse()->redirect_exit($path, $code);
     }
 }

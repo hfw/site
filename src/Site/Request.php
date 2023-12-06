@@ -3,6 +3,7 @@
 namespace Helix\Site;
 
 use ArrayAccess;
+use Helix\Site;
 use LogicException;
 
 /**
@@ -12,69 +13,69 @@ class Request implements ArrayAccess
 {
 
     /**
-     * Grouped file uploads (multiple).
-     *
-     * `[ name => Upload[] ]`
-     *
-     * @var Upload[][]
-     */
-    protected $fileGroups = [];
-
-    /**
-     * File uploads (singular).
-     *
-     * `[ name => Upload ]`
-     *
-     * @var Upload[]
-     */
-    protected $files = [];
-
-    /**
      * Request headers, keyed in lowercase.
      *
      * @var string[]
      */
-    protected $headers = [];
+    public readonly array $headers;
+
+    /**
+     * HTTP method.
+     *
+     * @var string
+     */
+    public readonly string $method;
 
     /**
      * The request path, without arguments, cleaned up.
      *
      * @var string
      */
-    protected $path;
+    public readonly string $path;
 
     /**
-     * Trust client IP forwarding from these proxies.
-     *
-     * @var string[]
+     * @var Site
      */
-    protected $proxies = [];
+    public readonly Site $site;
+
+    /**
+     * `POST` file uploads.
+     *
+     * @var Upload[]
+     */
+    public readonly array $uploads;
 
     /**
      * Constructs using CGI data.
      */
-    public function __construct()
+    public function __construct(Site $site)
     {
+        $this->method = strtoupper($_SERVER['REQUEST_METHOD']);
+        $this->site = $site;
         $this->path = Util::path(urldecode(strtok($_SERVER['REQUEST_URI'], '?')));
         $this->headers = array_change_key_case(getallheaders());
-        foreach ($_FILES as $name => $file) {
+        $uploads = [];
+        foreach ($_FILES as $group => $file) {
             if (is_array($file['name'])) {
                 // php makes file groups an inside-out table. unwrap it.
                 for ($i = 0; $i < count($file['name']); $i++) {
-                    $this->fileGroups[$name][$i] = new Upload(
-                        $file['error_code'][$i],
+                    $uploads[] = $site->factory(Upload::class,
+                        $group,
                         $file['name'][$i],
+                        $file['error_code'][$i],
                         $file['tmp_name'][$i]
                     );
                 }
             } else {
-                $this->files[$name] = new Upload(
-                    $file['error_code'],
+                $uploads[] = $site->factory(Upload::class,
+                    $group,
                     $file['name'],
+                    $file['error_code'],
                     $file['tmp_name']
                 );
             }
         }
+        $this->uploads = $uploads;
     }
 
     /**
@@ -86,166 +87,57 @@ class Request implements ArrayAccess
     }
 
     /**
-     * Returns `POST` args merged over `GET` args.
-     *
-     * @return array
-     */
-    public function getArgs(): array
-    {
-        return array_merge($_GET, $_POST);
-    }
-
-    /**
      * Returns the client IP, which may have been forwarded.
      *
      * @return string
      */
-    public function getClient()
+    public function getIp(): string
     {
-        if (in_array($_SERVER['REMOTE_ADDR'], $this->proxies)) {
+        if (in_array($_SERVER['REMOTE_ADDR'], $this->site->getProxies())) {
             return $this['X-Forwarded-For'] ?? $_SERVER['REMOTE_ADDR'];
         }
         return $_SERVER['REMOTE_ADDR'];
     }
 
     /**
-     * @param string $name
-     * @return null|Upload
-     */
-    final public function getFile(string $name)
-    {
-        return $this->files[$name] ?? null;
-    }
-
-    /**
-     * @param string $name
+     * @param string $group
      * @return Upload[]
      */
-    final public function getFileGroup(string $name)
+    final public function getUploads(string $group): array
     {
-        return $this->fileGroups[$name] ?? [];
-    }
-
-    /**
-     * @return Upload[][]
-     */
-    final public function getFileGroups()
-    {
-        return $this->fileGroups;
-    }
-
-    /**
-     * @return Upload[]
-     */
-    final public function getFiles()
-    {
-        return $this->files;
-    }
-
-    /**
-     * @return string[]
-     */
-    public function getHeaders(): array
-    {
-        return $this->headers;
-    }
-
-    /**
-     * @return string
-     */
-    final public function getMethod(): string
-    {
-        return $_SERVER['REQUEST_METHOD'];
-    }
-
-    /**
-     * @return string
-     */
-    final public function getPath(): string
-    {
-        return $this->path;
-    }
-
-    /**
-     * @return string[]
-     */
-    public function getProxies(): array
-    {
-        return $this->proxies;
-    }
-
-    /**
-     * @return bool
-     */
-    final public function isDelete(): bool
-    {
-        return $_SERVER['REQUEST_METHOD'] === 'DELETE';
-    }
-
-    /**
-     * @return bool
-     */
-    final public function isGet(): bool
-    {
-        return $_SERVER['REQUEST_METHOD'] === 'GET';
-    }
-
-    /**
-     * @return bool
-     */
-    final public function isHead(): bool
-    {
-        return $_SERVER['REQUEST_METHOD'] === 'HEAD';
-    }
-
-    /**
-     * Whether the request can produce side-effects.
-     *
-     * @return bool
-     */
-    final public function isMuting(): bool
-    {
-        return !$this->isGet() and !$this->isHead();
-    }
-
-    /**
-     * @return bool
-     */
-    final public function isPost(): bool
-    {
-        return $_SERVER['REQUEST_METHOD'] === 'POST';
+        return array_filter($this->uploads, fn(Upload $upload) => $upload->group === $group);
     }
 
     /**
      * Checks for a request header.
      *
-     * @param string $key
+     * @param string $offset
      * @return bool
      */
-    public function offsetExists($key): bool
+    final public function offsetExists($offset): bool
     {
-        return isset($this->headers[strtolower($key)]);
+        return isset($this->headers[strtolower($offset)]);
     }
 
     /**
      * Returns a request header.
      *
-     * @param string $key
+     * @param string $offset
      * @return null|string
      */
-    public function offsetGet($key): ?string
+    final public function offsetGet($offset): ?string
     {
-        return $this->headers[strtolower($key)] ?? null;
+        return $this->headers[strtolower($offset)] ?? null;
     }
 
     /**
      * Throws.
      *
-     * @param mixed $key
+     * @param mixed $offset
      * @param mixed $value
      * @throws LogicException
      */
-    final public function offsetSet($key, $value): void
+    final public function offsetSet(mixed $offset, mixed $value): never
     {
         throw new LogicException('Request headers are immutable.');
     }
@@ -253,21 +145,12 @@ class Request implements ArrayAccess
     /**
      * Throws.
      *
-     * @param mixed $key
+     * @param mixed $offset
      * @throws LogicException
      */
-    final public function offsetUnset($key): void
+    final public function offsetUnset(mixed $offset): never
     {
         throw new LogicException('Request headers are immutable.');
     }
 
-    /**
-     * @param string[] $proxies
-     * @return $this
-     */
-    public function setProxies(array $proxies)
-    {
-        $this->proxies = $proxies;
-        return $this;
-    }
 }
