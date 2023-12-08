@@ -43,13 +43,13 @@ class View extends Response
      *
      * @param string $template
      * @param array $data
-     * @return void
+     * @return mixed
      */
-    public function inc(string $template, array $data): void
+    public function inc(string $template, array $data): mixed
     {
         unset($data['template'], $data['this']);
         extract($data);
-        include $template;
+        return include $template;
     }
 
     /**
